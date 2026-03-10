@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Cybercrime Intelligence Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <div class="header">
+        <h1>🛡 AI Cybercrime Intelligence Assistant</h1>
+        <p>Fraud Detection & Risk Intelligence System</p>
+    </div>
+
+    <div class="grid">
+
+        <!-- LEFT PANEL -->
+        <div class="card">
+            <h2>🔐 Complaint Input</h2>
+
+            <form method="POST">
+                <textarea name="complaint" required
+                placeholder="Enter complaint details...">{{ complaint or '' }}</textarea>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn-primary">
+                        🔎 ANALYZE COMPLAINT
+                    </button>
+
+                    <button type="button" class="btn-secondary"
+                        onclick="window.location.href='/'">
+                        🗑 CLEAR
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- RIGHT PANEL -->
+        <div class="card">
+            <h2>📊 Analysis Results</h2>
+
+            {% if category %}
+            <div class="result-box">
+                <label>📄 COMPLAINT SUMMARY</label>
+                <p>{{ complaint }}</p>
+            </div>
+
+            <div class="result-box">
+                <label>🎯 PREDICTED SCAM CATEGORY</label>
+                <div class="badge">{{ category }}</div>
+            </div>
+
+            <div class="result-box">
+                <label>⚠ RISK LEVEL</label>
+                <div class="risk {% if risk==1 %}high{% else %}low{% endif %}">
+                    {% if risk==1 %}HIGH{% else %}LOW{% endif %}
+                </div>
+            </div>
+
+            <div class="result-box">
+                <label>🌐 FRAUD NETWORK SCORE</label>
+
+                <div class="progress">
+                   <div class="progress-bar"
+                    data-score="{{ fraud_score }}">
+                </div>
+                </div>
+
+                <span class="score">{{ fraud_score }}%</span>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+# 1. Sabse badi file ko ignore karo (470MB wali)
+data/raw/Synthetic_Financial_datasets_log.csv
+
+# 2. Saari CSV aur Numpy files ko ignore karo (Data protection ke liye)
+data/raw/*.csv
+data/processed/*.csv
+data/embeddings/*.npy
+
+# 3. ML Models ko ignore karo (GitHub ke liye heavy hain)
+*.pkl
+
+# 4. Secrets aur Cache ko ignore karo
+.env
+__pycache__/
+venv/
+.git/
