@@ -4,6 +4,7 @@ import torch
 import joblib
 import pandas as pd
 import numpy as np
+import os
 
 app = Flask(__name__)
 
@@ -14,10 +15,15 @@ app = Flask(__name__)
 model_name = "bert-base-uncased"
 tokenizer = BertTokenizer.from_pretrained(model_name)
 bert_model = BertForSequenceClassification.from_pretrained(model_name, num_labels=5)
+bert_model.eval()
 
-# Load Random Forest for risk assessment
-rf_model = joblib.load("fraud_model.pkl")
-scaler = joblib.load("scaler.pkl")
+# Load Random Forest for risk assessment (optional)
+try:
+    rf_model = joblib.load("fraud_model.pkl")
+    scaler = joblib.load("scaler.pkl")
+except Exception:
+    rf_model = None
+    scaler = None
 
 # Scam categories mapping
 CATEGORIES = [
@@ -113,8 +119,14 @@ def home():
                          fraud_score=fraud_score)
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    return {"status": "ok"}, 200
+
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=False)
 
 
 

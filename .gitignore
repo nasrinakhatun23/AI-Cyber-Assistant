@@ -8,6 +8,8 @@ data/embeddings/*.npy
 
 # 3. ML Models ko ignore karo (GitHub ke liye heavy hain)
 *.pkl
+!fraud_model.pkl
+!scaler.pkl
 
 # 4. Secrets aur Cache ko ignore karo
 .env
