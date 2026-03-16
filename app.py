@@ -1,9 +1,5 @@
 from flask import Flask, render_template, request
-from transformers import BertTokenizer, BertForSequenceClassification
-import torch
 import joblib
-import pandas as pd
-import numpy as np
 import os
 
 app = Flask(__name__)
@@ -11,12 +7,6 @@ app = Flask(__name__)
 # -----------------------------
 # Load Models
 # -----------------------------
-# Load BERT for complaint classification
-model_name = "bert-base-uncased"
-tokenizer = BertTokenizer.from_pretrained(model_name)
-bert_model = BertForSequenceClassification.from_pretrained(model_name, num_labels=5)
-bert_model.eval()
-
 # Load Random Forest for risk assessment (optional)
 try:
     rf_model = joblib.load("fraud_model.pkl")
@@ -25,68 +15,82 @@ except Exception:
     rf_model = None
     scaler = None
 
-# Scam categories mapping
-CATEGORIES = [
-    "Phishing/Identity Theft",
-    "Investment Fraud",
-    "Online Shopping Scam",
-    "Romance Scam",
-    "Tech Support Scam"
-]
+# Scam categories mapping with keywords
+CATEGORY_KEYWORDS = {
+    "Phishing/Identity Theft": [
+        "otp", "password", "bank account", "verify", "account blocked",
+        "suspended", "confirm", "credentials", "aadhar", "pan card",
+        "kyc", "login", "click here", "link", "phishing", "identity"
+    ],
+    "Investment Fraud": [
+        "investment", "crypto", "bitcoin", "profit", "double money",
+        "trading", "stock", "scheme", "high return", "guarantee",
+        "telegram", "whatsapp group", "forex", "nft", "wallet"
+    ],
+    "Online Shopping Scam": [
+        "order", "delivery", "amazon", "flipkart", "refund", "product",
+        "parcel", "courier", "shopping", "payment failed", "cod",
+        "cashback", "offer", "discount", "fake website"
+    ],
+    "Romance Scam": [
+        "love", "dating", "marriage", "friend", "instagram", "facebook",
+        "relationship", "meet", "gift", "army", "foreign person",
+        "lonely", "romance", "chat", "online friend"
+    ],
+    "Tech Support Scam": [
+        "virus", "hacked", "microsoft", "windows", "computer", "laptop",
+        "software", "technical", "support", "remote access", "pop up",
+        "call center", "helpline", "repair", "update"
+    ],
+}
 
 # -----------------------------
 # Helper Functions
 # -----------------------------
 def predict_category(text):
-    """Predict scam category using BERT"""
-    inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
-    
-    with torch.no_grad():
-        outputs = bert_model(**inputs)
-    
-    logits = outputs.logits
-    predicted_class = torch.argmax(logits, dim=1).item()
-    
-    return CATEGORIES[predicted_class]
+    """Predict scam category using keyword matching"""
+    text_lower = text.lower()
+    scores = {}
+
+    for category, keywords in CATEGORY_KEYWORDS.items():
+        score = sum(1 for kw in keywords if kw in text_lower)
+        scores[category] = score
+
+    best = max(scores, key=scores.get)
+    # If no keyword matched, return generic
+    if scores[best] == 0:
+        return "Phishing/Identity Theft"
+    return best
+
 
 def calculate_risk_score(complaint_text):
     """Calculate fraud risk score based on complaint features"""
-    # Simple rule-based scoring
     score = 0
-    
-    # Keyword-based scoring
-    high_risk_keywords = ['urgent', 'lottery', 'winner', 'bank account', 'password', 
-                          'otp', 'verify', 'suspend', 'foreign', 'inheritance',
-                          'prize', 'congratulations', 'click here', 'link', 'account blocked',
-                          'suspended', 'confirm', 'update', 'expire', 'act now']
-    
-    medium_risk_keywords = ['payment', 'transfer', 'investment', 'offer', 'deal',
-                           'money', 'cash', 'reward', 'refund']
-    
     text_lower = complaint_text.lower()
-    
-    # High risk keywords
+
+    high_risk_keywords = [
+        'urgent', 'lottery', 'winner', 'bank account', 'password',
+        'otp', 'verify', 'suspend', 'foreign', 'inheritance',
+        'prize', 'congratulations', 'click here', 'link', 'account blocked',
+        'suspended', 'confirm', 'update', 'expire', 'act now'
+    ]
+    medium_risk_keywords = [
+        'payment', 'transfer', 'investment', 'offer', 'deal',
+        'money', 'cash', 'reward', 'refund'
+    ]
+
     for keyword in high_risk_keywords:
         if keyword in text_lower:
             score += 10
-    
-    # Medium risk keywords
     for keyword in medium_risk_keywords:
         if keyword in text_lower:
             score += 5
-    
-    # Cap at 100
-    score = min(score, 100)
-    
-    return score
+
+    return min(score, 100)
+
 
 def predict_risk_level(fraud_score):
-    """Predict if transaction is high risk (1) or low risk (0)"""
-    # Rule-based risk classification
-    if fraud_score > 40:
-        return 1
-    else:
-        return 0
+    return 1 if fraud_score > 40 else 0
 
 # -----------------------------
 # Home Route
