@@ -5,6 +5,14 @@ import os
 
 app = Flask(__name__)
 
+USE_BERT = os.getenv("USE_BERT", "false").lower() == "true"
+BERT_MODEL_PATH = os.getenv("BERT_MODEL_PATH", "bert_complaint_model")
+
+bert_tokenizer = None
+bert_model = None
+torch = None
+classification_mode = "keyword"
+
 # -----------------------------
 # Load Models
 # -----------------------------
@@ -17,6 +25,14 @@ except Exception:
     scaler = None
 
 # Scam categories mapping with keywords
+CATEGORIES = [
+    "Phishing/Identity Theft",
+    "Investment Fraud",
+    "Online Shopping Scam",
+    "Romance Scam",
+    "Tech Support Scam",
+]
+
 CATEGORY_KEYWORDS = {
     "Phishing/Identity Theft": [
         "otp", "password", "bank account", "verify", "account blocked",
@@ -45,10 +61,26 @@ CATEGORY_KEYWORDS = {
     ],
 }
 
+# Try to load BERT only when explicitly enabled
+if USE_BERT:
+    try:
+        from transformers import BertTokenizer, BertForSequenceClassification
+        import torch as torch_lib
+
+        bert_tokenizer = BertTokenizer.from_pretrained(BERT_MODEL_PATH)
+        bert_model = BertForSequenceClassification.from_pretrained(BERT_MODEL_PATH)
+        torch = torch_lib
+        classification_mode = "bert"
+    except Exception:
+        bert_tokenizer = None
+        bert_model = None
+        torch = None
+        classification_mode = "keyword"
+
 # -----------------------------
 # Helper Functions
 # -----------------------------
-def predict_category(text):
+def predict_category_keyword(text):
     """Predict scam category using keyword matching"""
     text_lower = text.lower()
     scores = {}
@@ -62,6 +94,27 @@ def predict_category(text):
     if scores[best] == 0:
         return "Phishing/Identity Theft"
     return best
+
+
+def predict_category_bert(text):
+    """Predict scam category using fine-tuned BERT model"""
+    if bert_model is None or bert_tokenizer is None or torch is None:
+        return predict_category_keyword(text)
+
+    inputs = bert_tokenizer(text, return_tensors="pt", truncation=True, padding=True)
+    with torch.no_grad():
+        outputs = bert_model(**inputs)
+    predicted_class = torch.argmax(outputs.logits, dim=1).item()
+
+    if 0 <= predicted_class < len(CATEGORIES):
+        return CATEGORIES[predicted_class]
+    return predict_category_keyword(text)
+
+
+def predict_category(text):
+    if classification_mode == "bert":
+        return predict_category_bert(text)
+    return predict_category_keyword(text)
 
 
 def calculate_risk_score(complaint_text):
@@ -165,7 +218,11 @@ def transaction():
 
 @app.route("/health", methods=["GET"])
 def health():
-    return {"status": "ok"}, 200
+    return {
+        "status": "ok",
+        "classification_mode": classification_mode,
+        "rf_model_loaded": rf_model is not None and scaler is not None,
+    }, 200
 
 
 if __name__ == "__main__":

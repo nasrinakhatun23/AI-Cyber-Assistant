@@ -133,7 +133,7 @@
                 <div class="result-box">
                     <label>📈 FRAUD PROBABILITY</label>
                     <div class="prob-bar">
-                        <div class="prob-fill" style="width: {{ fraud_prob }}%;"></div>
+                        <div class="prob-fill" data-prob="{{ fraud_prob }}"></div>
                     </div>
                     <span class="score" style="margin-top: 8px; display: block;">{{ fraud_prob }}%</span>
                 </div>
@@ -160,6 +160,17 @@
 
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const probFill = document.querySelector(".prob-fill[data-prob]");
+        if (probFill) {
+            const value = parseFloat(probFill.getAttribute("data-prob")) || 0;
+            const safeValue = Math.max(0, Math.min(100, value));
+            probFill.style.width = safeValue + "%";
+        }
+    });
+</script>
 
 </body>
 </html>
