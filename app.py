@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request
 import joblib
+import pandas as pd
 import os
 
 app = Flask(__name__)
@@ -121,6 +122,45 @@ def home():
                          complaint=complaint,
                          risk=risk,
                          fraud_score=fraud_score)
+
+
+@app.route("/transaction", methods=["GET", "POST"])
+def transaction():
+    """Transaction Fraud Detection using trained Random Forest model"""
+    result = None
+    fraud_prob = None
+    error = None
+
+    if request.method == "POST":
+        if rf_model is None or scaler is None:
+            error = "Random Forest model not loaded."
+        else:
+            try:
+                data = {
+                    "step":           float(request.form.get("step", 1)),
+                    "amount":         float(request.form.get("amount", 0)),
+                    "oldbalanceOrg":  float(request.form.get("oldbalanceOrg", 0)),
+                    "newbalanceOrig": float(request.form.get("newbalanceOrig", 0)),
+                    "oldbalanceDest": float(request.form.get("oldbalanceDest", 0)),
+                    "newbalanceDest": float(request.form.get("newbalanceDest", 0)),
+                    "isFlaggedFraud": 0,
+                    "type_CASH_OUT":  1 if request.form.get("txn_type") == "CASH_OUT"  else 0,
+                    "type_DEBIT":     1 if request.form.get("txn_type") == "DEBIT"     else 0,
+                    "type_PAYMENT":   1 if request.form.get("txn_type") == "PAYMENT"   else 0,
+                    "type_TRANSFER":  1 if request.form.get("txn_type") == "TRANSFER"  else 0,
+                }
+                input_df = pd.DataFrame([data])
+                scaled   = scaler.transform(input_df)
+                pred     = rf_model.predict(scaled)[0]
+                fraud_prob = round(rf_model.predict_proba(scaled)[0][1] * 100, 1)
+                result   = "FRAUD" if pred == 1 else "NORMAL"
+            except Exception as e:
+                error = str(e)
+
+    return render_template("transaction.html",
+                           result=result,
+                           fraud_prob=fraud_prob,
+                           error=error)
 
 
 @app.route("/health", methods=["GET"])

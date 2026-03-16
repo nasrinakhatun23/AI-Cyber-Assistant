@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Transaction Fraud Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .form-row input, .form-row select {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .form-row input::placeholder { color: #aaa; }
+        .form-row select option { background: #1a2a4a; }
+        .form-group label {
+            display: block;
+            color: #a0c4ff;
+            font-size: 12px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .result-fraud { color: #ff4d4d; font-size: 24px; font-weight: bold; }
+        .result-normal { color: #4dff88; font-size: 24px; font-weight: bold; }
+        .prob-bar { background: rgba(255,255,255,0.1); border-radius: 20px; height: 18px; margin-top: 8px; overflow: hidden; }
+        .prob-fill { height: 100%; border-radius: 20px; background: linear-gradient(90deg, #4dff88, #ff4d4d); transition: width 0.8s ease; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #a0c4ff; text-decoration: none; font-size: 14px; }
+        .back-link:hover { color: #fff; }
+        .error-box { background: rgba(255,77,77,0.15); border: 1px solid #ff4d4d; border-radius: 10px; padding: 12px 16px; color: #ff4d4d; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>🏦 Transaction Fraud Detection</h1>
+        <p>Powered by Trained Random Forest Model (100 Trees)</p>
+    </div>
+
+    <a href="/" class="back-link">← Back to Complaint Analysis</a>
+
+    <div class="grid">
+
+        <!-- LEFT: INPUT FORM -->
+        <div class="card">
+            <h2>💳 Transaction Details</h2>
+
+            <form method="POST">
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Step (Hour)</label>
+                        <input type="number" name="step" placeholder="e.g. 1" value="{{ request.form.get('step', '') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Transaction Type</label>
+                        <select name="txn_type" required>
+                            <option value="PAYMENT"  {% if request.form.get('txn_type')=='PAYMENT'  %}selected{% endif %}>PAYMENT</option>
+                            <option value="TRANSFER" {% if request.form.get('txn_type')=='TRANSFER' %}selected{% endif %}>TRANSFER</option>
+                            <option value="CASH_OUT" {% if request.form.get('txn_type')=='CASH_OUT' %}selected{% endif %}>CASH OUT</option>
+                            <option value="DEBIT"    {% if request.form.get('txn_type')=='DEBIT'    %}selected{% endif %}>DEBIT</option>
+                            <option value="CASH_IN"  {% if request.form.get('txn_type')=='CASH_IN'  %}selected{% endif %}>CASH IN</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Amount (₹)</label>
+                        <input type="number" step="0.01" name="amount" placeholder="e.g. 5000" value="{{ request.form.get('amount', '') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Sender Old Balance</label>
+                        <input type="number" step="0.01" name="oldbalanceOrg" placeholder="e.g. 10000" value="{{ request.form.get('oldbalanceOrg', '') }}" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Sender New Balance</label>
+                        <input type="number" step="0.01" name="newbalanceOrig" placeholder="e.g. 5000" value="{{ request.form.get('newbalanceOrig', '') }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Receiver Old Balance</label>
+                        <input type="number" step="0.01" name="oldbalanceDest" placeholder="e.g. 0" value="{{ request.form.get('oldbalanceDest', '') }}" required>
+                    </div>
+                </div>
+
+                <div class="form-row" style="grid-template-columns: 1fr;">
+                    <div class="form-group">
+                        <label>Receiver New Balance</label>
+                        <input type="number" step="0.01" name="newbalanceDest" placeholder="e.g. 5000" value="{{ request.form.get('newbalanceDest', '') }}" required>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="submit" class="btn-primary">🔍 CHECK FRAUD</button>
+                    <button type="button" class="btn-secondary" onclick="window.location.href='/transaction'">🗑 CLEAR</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- RIGHT: RESULT -->
+        <div class="card">
+            <h2>📊 Detection Result</h2>
+
+            {% if error %}
+                <div class="error-box">❌ Error: {{ error }}</div>
+
+            {% elif result %}
+                <div class="result-box">
+                    <label>🎯 VERDICT</label>
+                    <div class="{% if result == 'FRAUD' %}result-fraud{% else %}result-normal{% endif %}">
+                        {% if result == 'FRAUD' %}
+                            🚨 FRAUDULENT TRANSACTION
+                        {% else %}
+                            ✅ NORMAL TRANSACTION
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="result-box">
+                    <label>📈 FRAUD PROBABILITY</label>
+                    <div class="prob-bar">
+                        <div class="prob-fill" style="width: {{ fraud_prob }}%;"></div>
+                    </div>
+                    <span class="score" style="margin-top: 8px; display: block;">{{ fraud_prob }}%</span>
+                </div>
+
+                <div class="result-box">
+                    <label>🤖 MODEL USED</label>
+                    <div class="badge">Random Forest (100 Trees)</div>
+                </div>
+
+                <div class="result-box">
+                    <label>📋 FEATURES ANALYZED</label>
+                    <p style="font-size: 13px; color: #ccc; line-height: 1.8;">
+                        Step &bull; Amount &bull; Sender Balance &bull; Receiver Balance &bull; Transaction Type
+                    </p>
+                </div>
+
+            {% else %}
+                <div style="color: #aaa; text-align: center; padding: 40px 20px;">
+                    <p style="font-size: 40px;">🏦</p>
+                    <p>Enter transaction details to detect fraud</p>
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+
+</body>
+</html>
